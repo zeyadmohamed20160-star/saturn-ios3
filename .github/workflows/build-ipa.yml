@@ -1,4 +1,4 @@
-name: Build Saturn IPA (Clean Repo Wrapper)
+name: Build Saturn IPA (Desktop Port Wrapper)
 
 on:
   push:
@@ -35,6 +35,12 @@ jobs:
 
     - name: Compile Engine via GNU Make
       run: |
+        # Auto-detects if the file is uppercase 'Makefile' or lowercase 'makefile'
+        if [ -f "makefile" ] && [ ! -f "Makefile" ]; then
+          echo "Detected lowercase makefile. Renaming to Makefile for server compatibility..."
+          mv makefile Makefile
+        fi
+        
         gmake OSX_BUILD=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$(sysctl -n hw.ncpu)
 
     - name: Assemble Mobile IPA Container

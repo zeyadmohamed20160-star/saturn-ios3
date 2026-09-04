@@ -1,0 +1,70 @@
+name: Build Saturn IPA (Desktop Port Wrapper)
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install System Dependencies
+      run: |
+        brew install make pkg-config sdl2 glew glfw adamstark-audiofile dylibbundler coreutils
+        # Bypasses the Homebrew Python environment block completely
+        pip3 install pillow --break-system-packages
+
+    - name: Set Execution Permissions
+      run: |
+        if [ -f "pcbuilder.sh" ]; then chmod +x pcbuilder.sh; fi
+        if [ -d "tools" ]; then chmod +x tools/* 2>/dev/null || true; fi
+
+    - name: Extract Game Assets
+      run: |
+        if [ -f "baserom.us.z64" ]; then
+          python3 ./extract_assets.py us || true
+        else
+          echo "⚠️ Warning: baserom.us.z64 not found in workspace directory."
+        fi
+
+    - name: Compile Engine via GNU Make
+      run: |
+        gmake OSX_BUILD=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$(sysctl -n hw.ncpu)
+
+    - name: Assemble Mobile IPA Container
+      run: |
+        mkdir -p build/Payload
+        
+        TARGET_BIN=$(find build/us_pc/ -type f -not -name "*.*" -not -name "%.*" | head -n 1)
+        
+        if [ -n "$TARGET_BIN" ]; then
+          echo "Found compiled application runtime asset: $TARGET_BIN"
+          
+          mkdir -p build/Payload/Saturn.app
+          cp "$TARGET_BIN" build/Payload/Saturn.app/Saturn
+          
+          if [ -d "res" ]; then cp -r res build/Payload/Saturn.app/; fi
+          
+          cd build
+          zip -r Saturn.ipa Payload
+          mkdir -p output
+          mv Saturn.ipa output/
+          mv output "$GITHUB_WORKSPACE/"
+        else
+          echo "❌ ERROR: Compilation finished but the output binary was not found in build/us_pc/"
+          ls -la build/us_pc/ || true
+          exit 1
+        fi
+
+    - name: Upload Production IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: Saturn-IPA
+        path: output/Saturn.ipa

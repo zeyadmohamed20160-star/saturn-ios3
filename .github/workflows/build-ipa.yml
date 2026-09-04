@@ -44,12 +44,10 @@ jobs:
 
       - name: 5. Engine Cross-Compilation Profile
         run: |
+          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           NPROC=$(sysctl -n hw.ncpu)
           
-          # Target Homebrew libraries explicitly so the native compiler finds them instantly
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          
-          # Use the guaranteed native system command 'make' directly
+          # Native system make execution targeting to eliminate code 127 variables
           make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
           make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC
 

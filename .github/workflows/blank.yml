@@ -1,10 +1,10 @@
-name: Build Saturn IPA (Desktop Port Wrapper)
+name: Build Saturn IPA (Clean Repo Wrapper)
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,6 @@ jobs:
     - name: Install System Dependencies
       run: |
         brew install make pkg-config sdl2 glew glfw adamstark-audiofile dylibbundler coreutils
-        # Bypasses the Homebrew Python environment block completely
         pip3 install pillow --break-system-packages
 
     - name: Set Execution Permissions
@@ -31,7 +30,7 @@ jobs:
         if [ -f "baserom.us.z64" ]; then
           python3 ./extract_assets.py us || true
         else
-          echo "⚠️ Warning: baserom.us.z64 not found in workspace directory."
+          echo "⚠️ Warning: baserom.us.z64 not found in workspace root."
         fi
 
     - name: Compile Engine via GNU Make

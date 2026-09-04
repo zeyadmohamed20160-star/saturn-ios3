@@ -16,7 +16,6 @@ jobs:
 
       - name: 2. Initialize System Packages
         run: |
-          # Re-added packages to guarantee environment links exist on the server
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
 
       - name: 3. Resolve Python Constraints
@@ -47,9 +46,11 @@ jobs:
         run: |
           NPROC=$(sysctl -n hw.ncpu)
           
-          # Explicit path targeting to guarantee the compiler wakes up instantly
-          /opt/homebrew/bin/gmake OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          /opt/homebrew/bin/gmake OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
+          # Target Homebrew libraries explicitly so the native compiler finds them instantly
+          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+          
+          # Use the guaranteed native system command 'make' directly
+          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
           make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC
 
       - name: 6. Layout Assembly and Packaging

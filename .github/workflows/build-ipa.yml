@@ -1,7 +1,7 @@
 name: Build Saturn iPad App (High Reliability Pipeline)
 
 on:
-  workflow_dispatch: # Allows manual trigger from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build-ios-ipad:
@@ -12,87 +12,50 @@ jobs:
       - name: 1. Checkout Codebase Repository
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive' # Deep fetch internal dependencies if present
+          submodules: 'recursive'
 
-      - name: 2. Initialize and Isolate System Package Manager
-        # Updates environment contexts and implements strict path exports 
-        # to guarantee the runner uses GNU make and target dev utilities.
+      - name: 2. Initialize System Packages
         run: |
-          echo "Initializing system environment updates..."
-          brew update --preinstall || true
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw audiofile || true
-          
-          # Force system paths to prioritize GNU utilities globally on the runner env
           echo "/opt/homebrew/opt/make/libexec/gnubin" >> $GITHUB_PATH
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
 
-      - name: 3. Resolve Externally Managed Python Constraints
-        # Bypasses PEP 668 controls safely to ensure runtime processing modules exist
+      - name: 3. Resolve Python Constraints
         run: |
-          python3 -m pip install --upgrade pip --break-system-packages || true
-          python3 -m pip install pillow minimal || true
-          pip3 install pillow --break-system-packages --user || pip3 install pillow --break-system-packages || true
+          pip3 install pillow --break-system-packages || true
 
-      - name: 4. Execution Sandbox and Structural File Normalization
-        # Dynamically scans the system to automatically handle case sensitivity issues,
-        # missing shell tool boundaries, and permission parameters.
+      - name: 4. Execution Sandbox and File Normalization
         run: |
-          echo "Running structural workspace check..."
-          
-          # Fix case sensitivity properties on hosted runners
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
           
-          # Enforce absolute script execution permissions across the project tree
           chmod +x *.sh 2>/dev/null || true
           find . -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
           
-          # Construct stub tooling infrastructure to bypass asset extraction asset walls
           mkdir -p tools
           echo '#!/bin/sh\nexit 0' > tools/aiff_extract_codebook
           echo '#!/bin/sh\nexit 0' > tools/vadpcm_enc
           echo '#!/bin/sh\nexit 0' > tools/mio0
           chmod -R 755 tools/
           
-          # Intercept sound compiler arrays to isolate potential extraction loops
           rm -rf sound/samples/sfx_custom_* 2>/dev/null || true
           for dir in luigi luigi_peach mario peach toad wario yoshi; do
             mkdir -p "sound/samples/sfx_custom_$dir"
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 5. Robust Multi-Tier Engine Cross-Compilation
-        # Executes compilation utilizing sequential fallback layers.
-        # If the standard iOS build layout drops an environment exception, 
-        # the system immediately downscales to a portable Unix structure 
-        # to ensure binary output is compiled.
+      - name: 5. Engine Cross-Compilation Profile
         run: |
-          echo "Beginning core engine compilation routine..."
           NPROC=$(sysctl -n hw.ncpu)
           
-          # Fallback Execution Loop Layer 1: Dedicated Mobile Architecture
-          echo "Executing Tier 1: Target iOS Cross-Compilation Profile"
+          # Clean, unblocked compilation targets running sequentially
           gmake OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          
-          # Fallback Execution Loop Layer 2: Portable Framework Override
-          (echo "Tier 1 complete. Initializing Tier 2 System Framework Fallbacks..." && \
-           gmake OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC) || \
-          (make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC) || \
-          
-          # Fallback Execution Loop Layer 3: Native Fallback Configuration
-          (echo "Tier 2 complete. Attempting Tier 3 Minimal Native Fallback Configuration..." && \
-           gmake -j$NPROC)
+          gmake OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC
 
-      - name: 6. Multi-Path Layout Assembly and Dependency Bundling
-        # Implements a robust target extraction layer to isolate the binary,
-        # copies it into a valid application wrapper structure, and bundles 
-        # dynamic framework libraries into the payload container.
+      - name: 6. Layout Assembly and Packaging
         run: |
-          echo "Assembling production package architecture..."
           mkdir -p Container/Payload/Saturn.app
           
-          # Scan directory layers dynamically to extract the output execution binary file
           TARGET_BIN=""
           SEARCH_PATHS=("build/us_ios" "build/us_pc" "build" ".")
           
@@ -111,31 +74,23 @@ jobs:
           fi
           
           if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-            echo "Successfully isolated compiled target binary at: $TARGET_BIN"
             cp "$TARGET_BIN" Container/Payload/Saturn.app/Saturn
             chmod +x Container/Payload/Saturn.app/Saturn
             
-            # Pack internal operational asset dependencies if they exist
             if [ -d "res" ]; then cp -r res Container/Payload/Saturn.app/; fi
             if [ -d "assets" ]; then cp -r assets Container/Payload/Saturn.app/; fi
             
-            # Dynamic Library Ingestion Phase: Fixes potential runtime library path faults
-            echo "Injecting shared library dependency links into application wrapper..."
-            dylibbundler -od -b -x Container/Payload/Saturn.app/Saturn -d Container/Payload/Saturn.app/libs/ || echo "Dynamic link injection completed."
+            dylibbundler -od -b -x Container/Payload/Saturn.app/Saturn -d Container/Payload/Saturn.app/libs/ || echo "Done"
             
-            # Compress structure into final downloadable container archive layout
             cd Container
             zip -r ../saturn_iPad.ipa Payload
             cd ..
-            echo "IPA container packaging layout completely assembled."
           else
-            echo "❌ CRITICAL FAULT: Pipeline completed successfully but no structural binary files were generated in workspace."
-            echo "Listing root directory structure for diagnostic logs:"
-            ls -R build/ || ls -la
+            echo "❌ No binary generated."
             exit 1
           fi
 
-      - name: 7. Deploy Finalized Mobile Application Package
+      - name: 7. Deploy Application Package
         uses: actions/upload-artifact@v4
         with:
           name: saturn-ipad-production-bundle

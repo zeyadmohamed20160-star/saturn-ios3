@@ -1,0 +1,99 @@
+# Object files
+*.o
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.exp
+
+# Patch and wiggle related residdue
+*.rej
+*.porig
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+#*.dll
+#*.so
+#*.so.*
+#*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# datadump
+/tools/ddump/*
+
+# Text editor remnants
+*.swp
+.vscode/*
+.idea/*
+
+# General project-specific ignores
+doxygen/doxygen/*
+build/*
+*.dump
+*.mio0
+*.z64
+*.map
+*.sav
+.assets-local.txt
+sm64_save_file.bin
+sm64config.txt
+
+# Assets. Generally ignored, but ones with "custom" in the name are fine.
+/levels/**/*.png
+/actors/**/*.png
+/textures/**/*.png
+!/textures/saturn/*.png
+/assets/**/*.bin
+/sound/**/*.m64
+/sound/**/*.aiff
+!/levels/**/*custom*.png
+!/levels/**/*custom*/**/*.png
+!/actors/**/*custom*.png
+!/actors/**/*custom*/**/*.png
+!/textures/**/*custom*.png
+!/textures/**/*custom*/**/*.png
+!/sound/**/*custom*.m64
+!/sound/**/*custom*/**/*.m64
+!/sound/**/*custom*.aiff
+!/sound/**/*custom*/**/*.aiff
+!/assets/**/*custom*.bin
+!/assets/**/*custom*/**/*.bin
+
+# Saturn
+actors/mario_cap/mario_cap_logo.rgba16.png
+actors/mario/mario_logo.rgba16.png
+*.spj
+*.stm
+command_data.bin
+
+res/gfx
+res/sound
+
+!/res/gfx/textures/title_screen_bg/title_screen_bg.00E40.rgba16.png
+!/res/gfx/textures/title_screen_bg/title_screen_bg.001C0.rgba16.png
+!/res/gfx/textures/title_screen_bg/title_screen_bg.01AC0.rgba16.png
+!/res/gfx/textures/title_screen_bg/title_screen_bg.02740.rgba16.png
+!/res/gfx/levels/intro/4_saturn.rgba16.png
+!/res/gfx/levels/intro/5_ring.rgba16.png
+!/res/gfx/actors/mario/no_m.rgba16.png

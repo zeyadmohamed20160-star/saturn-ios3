@@ -1,0 +1,10 @@
+{
+    "name": "Shadow Mario",
+    "author": "Llennpie",
+    "version": "1.0.0",
+
+    "description": "The first Saturn model ever created.",
+
+    "cc_support": false,
+    "spark_support": false
+}

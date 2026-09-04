@@ -1,7 +1,7 @@
 name: Build Saturn iPad App
 
 on:
-  workflow_dispatch: # Allows manual trigger from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build-ios-ipad:
@@ -10,66 +10,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Setup System Dependencies
         run: |
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler
           pip3 install pillow --break-system-packages
 
-      - name: Force Patch Sound Mod Extraction Setup
+      - name: Run Engine Compiler
         run: |
-          rm -rf sound/samples/sfx_custom_*
-          mkdir -p sound/samples/sfx_custom_luigi
-          mkdir -p sound/samples/sfx_custom_luigi_peach
-          mkdir -p sound/samples/sfx_custom_mario
-          mkdir -p sound/samples/sfx_custom_peach
-          mkdir -p sound/samples/sfx_custom_toad
-          mkdir -p sound/samples/sfx_custom_wario
-          mkdir -p sound/samples/sfx_custom_yoshi
-
-          mkdir -p tools
-          echo '#!/bin/sh' > tools/aiff_extract_codebook
-          echo 'exit 0' >> tools/aiff_extract_codebook
-          chmod +x tools/aiff_extract_codebook
-
-      - name: Fix Makefile Syntax and Script Permissions
-        run: |
-          # 1. Force the case-sensitivity check if named lowercase
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
-
-          # 2. Grant absolute system execution permissions to the setup scripts
-          if [ -f "pcbuilder.sh" ]; then chmod 755 pcbuilder.sh; fi
-          if [ -d "tools" ]; then chmod -R 755 tools; fi
-
-          # 3. Dynamic syntax cleanup: Remove accidental leading tabs on lines 7-12 of the Makefile
-          # This fixes the "recipe commences before first target" crash automatically
-          if [ -f "Makefile" ]; then
-            echo "Applying syntax formatting patch to Makefile rules..."
-            sed -i '' '7,12s/^[	 ]*//' Makefile || sed -i '7,12s/^[	 ]*//' Makefile
-          fi
-
-      - name: Compile Game Code for iOS
-        run: |
-          gmake OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$(sysctl -n hw.ncpu) || \
+          if [ -f "pcbuilder.sh" ]; then chmod +x pcbuilder.sh; fi
           gmake OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$(sysctl -n hw.ncpu)
 
-      - name: Structure and Compress Mobile IPA Bundle
+      - name: Package Output Container
         run: |
           mkdir -p Payload
-          
           APP_PATH=$(find build/ -name "*.app" -type d | head -n 1)
-          
           if [ -n "$APP_PATH" ] && [ -d "$APP_PATH" ]; then
-            echo "Found compiled bundle at $APP_PATH. Moving to packaging layout..."
             cp -r "$APP_PATH" Payload/
           else
-            cp -r build/us_ios/*.app Payload/ 2>/dev/null || cp -r build/us_pc/*.app Payload/ 2>/dev/null || echo "Bypassing path check..."
+            cp -r build/us_pc/*.app Payload/ 2>/dev/null || echo "No files"
           fi
-          
           zip -r saturn_iPad.ipa Payload
 
-      - name: Upload Finished Saturn iPad IPA Installer
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: saturn-ipad-bundle
           path: saturn_iPad.ipa
+
 

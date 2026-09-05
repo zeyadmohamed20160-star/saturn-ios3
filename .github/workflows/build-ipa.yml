@@ -1,4 +1,4 @@
-name: Build Saturn iPad App (High Reliability Pipeline)
+name: Build Saturn iPad App
 
 on:
   workflow_dispatch:
@@ -44,9 +44,12 @@ jobs:
 
       - name: 5. Build Companion Tools
         run: |
-          # Explicitly compile textconv and any other available tool sources for the host system
+          # Compile textconv along with its required helper modules (hashtable, utf8, etc.)
           if [ -f "tools/textconv.c" ]; then
-            clang -O2 tools/textconv.c -o tools/textconv
+            EXTRA_TOOL_FILES=""
+            [ -f "tools/hashtable.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/hashtable.c"
+            [ -f "tools/utf8.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/utf8.c"
+            clang -O2 tools/textconv.c $EXTRA_TOOL_FILES -o tools/textconv
           fi
           if [ -f "tools/n64graphics.c" ]; then
             clang -O2 tools/n64graphics.c -o tools/n64graphics

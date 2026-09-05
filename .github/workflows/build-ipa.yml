@@ -45,6 +45,12 @@ jobs:
       - name: 5. Engine Cross-Compilation Profile
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+          
+          # Force Clang to look in Homebrew's directories for SDL2
+          export C_INCLUDE_PATH="/opt/homebrew/include:$C_INCLUDE_PATH"
+          export CPLUS_INCLUDE_PATH="/opt/homebrew/include:$CPLUS_INCLUDE_PATH"
+          export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
+          
           NPROC=$(sysctl -n hw.ncpu)
           
           # Clang preprocessor override: -E (preprocess), -P (no linemarkers), -x c (force C language formatting)

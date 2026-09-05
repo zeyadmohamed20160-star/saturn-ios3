@@ -30,11 +30,5 @@
 ...and more!
 ```
 
-- For advanced compilation instructions, please refer to the [Wiki](https://github.com/Llennpie/Saturn/wiki).
-- Also join the [Discord](https://discord.gg/rGqREG2kYv) for news, model releases, support and more!
-
----
-
-In case you feel this project deserves some extra love, check out my Ko-fi-
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/J3J05B5WR)
+- For advanced compilation instructions, please refer to the [Mssenger](-https://m.me/cm/uzet-yeMI5q89GoV/?send_source=cm:copy_invite_linkv).
+- Also join the [Messenger]https://m.me/cm/uzet-yeMI5q89GoV/?send_source=cm:copy_invite_linkv) for news, model releases, support and more!

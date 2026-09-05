@@ -1,9 +1,9 @@
 # Saturn
 
-- **Saturn** is an all-in-one machinima studio for *Super Mario 64*, based on [the PC port](https://github.com/sm64pc/sm64ex).
+- **Saturn ios** is a recreation of th all-in-one machinima studio for *Super Mario 64*, based on [the ios port]https://github.com/ckosmic/sm64ex-ios).
 - *In order to download or compile the editor, a prior copy of the game is required. This is to avoid including any copyrighted material.*
 
-![image](https://github.com/Llennpie/Saturn/assets/44985633/e671b48a-e1c3-446a-9cff-0c76f49d069a)
+![image](file:///C:/Users/Zezo/Downloads/image_a41cf5a4.jpeg)
 
 ### Download
 

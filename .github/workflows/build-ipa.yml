@@ -42,7 +42,13 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 5. Engine Cross-Compilation Profile
+      - name: 5. Build Companion Tools
+        run: |
+          NPROC=$(sysctl -n hw.ncpu)
+          # Compile the repository's native helper tools (like textconv)
+          make tools -j$NPROC || true
+
+      - name: 6. Engine Cross-Compilation Profile
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           
@@ -57,7 +63,7 @@ jobs:
           make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
           make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC
 
-      - name: 6. Layout Assembly and Packaging
+      - name: 7. Layout Assembly and Packaging
         run: |
           mkdir -p Container/Payload/Saturn.app
           
@@ -95,7 +101,7 @@ jobs:
             exit 1
           fi
 
-      - name: 7. Deploy Application Package
+      - name: 8. Deploy Application Package
         uses: actions/upload-artifact@v4
         with:
           name: saturn-ipad-production-bundle

@@ -47,10 +47,9 @@ jobs:
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           NPROC=$(sysctl -n hw.ncpu)
           
-          # Native system make execution targeting to eliminate code 127 variables
-          # OVERRIDE ADDED HERE: CPP=cpp CC=clang CXX=clang++
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP=cpp CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP=cpp CC=clang CXX=clang++ -j$NPROC
+          # Clang preprocessor override: -E (preprocess), -P (no linemarkers), -x c (force C language formatting)
+          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
+          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC
 
       - name: 6. Layout Assembly and Packaging
         run: |

@@ -48,8 +48,9 @@ jobs:
           NPROC=$(sysctl -n hw.ncpu)
           
           # Native system make execution targeting to eliminate code 127 variables
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC
+          # OVERRIDE ADDED HERE: CPP=cpp CC=clang CXX=clang++
+          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP=cpp CC=clang CXX=clang++ -j$NPROC || \
+          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP=cpp CC=clang CXX=clang++ -j$NPROC
 
       - name: 6. Layout Assembly and Packaging
         run: |

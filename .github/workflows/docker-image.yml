@@ -29,8 +29,8 @@ jobs:
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-glew
-            python
-            python-pillow
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pillow
 
       - name: 3. Execution Sandbox and File Normalization
         run: |
@@ -107,7 +107,6 @@ jobs:
           if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
             cp "$TARGET_BIN" WindowsRelease/SaturnPC/Saturn.exe
             
-            # Copy necessary SDL2 DLLs for Windows execution
             if [ -f "/mingw64/bin/SDL2.dll" ]; then
               cp /mingw64/bin/SDL2.dll WindowsRelease/SaturnPC/
             fi

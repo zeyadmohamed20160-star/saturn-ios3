@@ -1,11 +1,11 @@
-name: Build Saturn iPad App (Custom Control Sandbox Edition)
+name: Build Saturn Desktop PC Port (Gamepad & Joystick Edition)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-ios-ipad-sandbox:
-    name: Core Cross-Compilation and Control Sandbox
+  build-pc-desktop:
+    name: Core Desktop PC Build
     runs-on: macos-latest
     
     steps:
@@ -42,7 +42,7 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 5. Build and Configure Companion Tools
+      - name: 5. Build Companion Tools
         run: |
           if [ -f "tools/textconv.c" ]; then
             EXTRA_TOOL_FILES=""
@@ -70,7 +70,7 @@ jobs:
           EOF
           chmod +x tools/* || true
 
-      - name: 6. Engine Cross-Compilation Profile
+      - name: 6. Compile Desktop PC Version
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           export C_INCLUDE_PATH="/opt/homebrew/include:$C_INCLUDE_PATH"
@@ -79,38 +79,16 @@ jobs:
           
           NPROC=$(sysctl -n hw.ncpu)
           
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || true
+          # Explicitly target the desktop PC build profile (omitting TARGET_IOS)
+          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
+          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CC=clang CXX=clang++ -j1 || true
 
-      - name: 7. Inject Custom Control Layout / Config Sandbox
+      - name: 7. Package Desktop PC App Bundle
         run: |
-          # This step creates a sandbox configuration profile for controls (sm64config.txt) 
-          # so you can tweak mapping variables, sensitivity, and layout parameters.
-          mkdir -p Container/Payload/Saturn.app
+          mkdir -p PC_Release/SaturnDesktop
           
-          CONFIG_DIR="Container/Payload/Saturn.app/res"
-          mkdir -p "$CONFIG_DIR"
-          
-          cat << 'EOF' > "$CONFIG_DIR/sm64config.txt"
-          # Saturn iOS Port - Custom Control Sandbox Profile
-          # You can hack/edit these parameters to adjust default configurations
-          window_width 1280
-          window_height 720
-          fullscreen 0
-          vsync 1
-          texture_filtering 1
-          analog_deadzone 15
-          # Default Key / Button Bindings Map
-          # key_a 0
-          # key_b 0
-          # key_z 0
-          # key_start 0
-          EOF
-
-      - name: 8. Layout Assembly and Packaging
-        run: |
           TARGET_BIN=""
-          SEARCH_PATHS=("build/us_ios" "build/us_pc" "build" ".")
+          SEARCH_PATHS=("build/us_pc" "build" ".")
           
           for path in "${SEARCH_PATHS[@]}"; do
             if [ -d "$path" ]; then
@@ -122,33 +100,24 @@ jobs:
             fi
           done
           
-          if [ -z "$TARGET_BIN" ] && [ -d "build" ]; then
-            TARGET_BIN=$(find build/ -type f -not -name "*.*" | head -n 1)
-          fi
-          
           if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-            cp "$TARGET_BIN" Container/Payload/Saturn.app/Saturn
-            chmod +x Container/Payload/Saturn.app/Saturn
+            cp "$TARGET_BIN" PC_Release/SaturnDesktop/Saturn
+            chmod +x PC_Release/SaturnDesktop/Saturn
             
-            if [ -d "res" ]; then cp -r res/* Container/Payload/Saturn.app/res/ 2>/dev/null || true; fi
-            if [ -d "assets" ]; then cp -r assets Container/Payload/Saturn.app/; fi
+            if [ -d "res" ]; then cp -r res PC_Release/SaturnDesktop/; fi
+            if [ -d "assets" ]; then cp -r assets PC_Release/SaturnDesktop/; fi
             
-            dylibbundler -od -b -x Container/Payload/Saturn.app/Saturn -d Container/Payload/Saturn.app/libs/ || echo "Done"
-            
-            cd Container
-            zip -r ../saturn_iPad_controls_sandbox.ipa Payload
+            cd PC_Release
+            zip -r ../saturn_pc_gamepad_edition.zip SaturnDesktop
             cd ..
           else
-            echo '#!/bin/sh\necho "Sandbox Fallback Executable"' > Container/Payload/Saturn.app/Saturn
-            chmod +x Container/Payload/Saturn.app/Saturn
-            cd Container
-            zip -r ../saturn_iPad_controls_sandbox.ipa Payload
-            cd ..
+            echo "❌ No binary found."
+            exit 1
           fi
 
-      - name: 9. Deploy Control Sandbox Package
+      - name: 8. Upload PC Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-ipad-controls-sandbox-bundle
-          path: saturn_iPad_controls_sandbox.ipa
+          name: saturn-pc-gamepad-bundle
+          path: saturn_pc_gamepad_edition.zip
           if-no-files-found: error

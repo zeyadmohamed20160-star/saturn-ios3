@@ -44,9 +44,16 @@ jobs:
 
       - name: 5. Build Companion Tools
         run: |
-          NPROC=$(sysctl -n hw.ncpu)
-          # Compile the repository's native helper tools (like textconv)
-          make tools -j$NPROC || true
+          # Explicitly compile textconv and any other available tool sources for the host system
+          if [ -f "tools/textconv.c" ]; then
+            clang -O2 tools/textconv.c -o tools/textconv
+          fi
+          if [ -f "tools/n64graphics.c" ]; then
+            clang -O2 tools/n64graphics.c -o tools/n64graphics
+          fi
+          if [ -d "tools" ]; then
+            chmod +x tools/* || true
+          fi
 
       - name: 6. Engine Cross-Compilation Profile
         run: |

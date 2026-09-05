@@ -1,34 +1,41 @@
-name: Build Saturn Desktop PC Port (Gamepad & Joystick Edition)
+name: Build Saturn Windows PC Port (.exe & Gamepads)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-pc-desktop:
-    name: Core Desktop PC Build
-    runs-on: macos-latest
+  build-windows-pc:
+    name: Build Windows Executable
+    runs-on: windows-latest
     
+    defaults:
+      run:
+        shell: msys2 {0}
+
     steps:
       - name: 1. Checkout Codebase Repository
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      - name: 2. Initialize System Packages
-        run: |
-          brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
+      - name: 2. Initialize MSYS2 & Toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-glew
+            python
+            python-pillow
 
-      - name: 3. Resolve Python Constraints
-        run: |
-          pip3 install pillow --break-system-packages || true
-
-      - name: 4. Execution Sandbox and File Normalization
+      - name: 3. Execution Sandbox and File Normalization
         run: |
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
-          
-          chmod +x *.sh 2>/dev/null || true
-          find . -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
           
           mkdir -p tools
           echo '#!/bin/sh\nexit 0' > tools/aiff_extract_codebook
@@ -42,13 +49,13 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 5. Build Companion Tools
+      - name: 4. Build Companion Tools
         run: |
           if [ -f "tools/textconv.c" ]; then
             EXTRA_TOOL_FILES=""
             [ -f "tools/hashtable.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/hashtable.c"
             [ -f "tools/utf8.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/utf8.c"
-            clang -O2 -Iinclude tools/textconv.c $EXTRA_TOOL_FILES -o tools/textconv || true
+            gcc -O2 -Iinclude tools/textconv.c $EXTRA_TOOL_FILES -o tools/textconv.exe || true
           fi
 
           cat << 'EOF' > tools/n64graphics
@@ -70,29 +77,22 @@ jobs:
           EOF
           chmod +x tools/* || true
 
-      - name: 6. Compile Desktop PC Version
+      - name: 5. Compile Windows PC Executable
         run: |
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export C_INCLUDE_PATH="/opt/homebrew/include:$C_INCLUDE_PATH"
-          export CPLUS_INCLUDE_PATH="/opt/homebrew/include:$CPLUS_INCLUDE_PATH"
-          export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
-          
-          NPROC=$(sysctl -n hw.ncpu)
-          
-          # Explicitly target the desktop PC build profile (omitting TARGET_IOS)
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CC=clang CXX=clang++ -j1 || true
+          NPROC=$(nproc)
+          make WINDOWS_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
+          make WINDOWS_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
 
-      - name: 7. Package Desktop PC App Bundle
+      - name: 6. Package Windows Release Bundle
         run: |
-          mkdir -p PC_Release/SaturnDesktop
+          mkdir -p WindowsRelease/SaturnPC
           
           TARGET_BIN=""
           SEARCH_PATHS=("build/us_pc" "build" ".")
           
           for path in "${SEARCH_PATHS[@]}"; do
             if [ -d "$path" ]; then
-              FOUND=$(find "$path" -type f -maxdepth 2 -not -name "*.*" -not -name "%%*" -not -path "*/.*" | head -n 1)
+              FOUND=$(find "$path" -type f -name "*.exe" -maxdepth 2 | head -n 1)
               if [ -n "$FOUND" ]; then
                 TARGET_BIN="$FOUND"
                 break
@@ -100,24 +100,32 @@ jobs:
             fi
           done
           
+          if [ -z "$TARGET_BIN" ]; then
+            TARGET_BIN=$(find . -maxdepth 3 -name "*.exe" | head -n 1)
+          fi
+          
           if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-            cp "$TARGET_BIN" PC_Release/SaturnDesktop/Saturn
-            chmod +x PC_Release/SaturnDesktop/Saturn
+            cp "$TARGET_BIN" WindowsRelease/SaturnPC/Saturn.exe
             
-            if [ -d "res" ]; then cp -r res PC_Release/SaturnDesktop/; fi
-            if [ -d "assets" ]; then cp -r assets PC_Release/SaturnDesktop/; fi
+            # Copy necessary SDL2 DLLs for Windows execution
+            if [ -f "/mingw64/bin/SDL2.dll" ]; then
+              cp /mingw64/bin/SDL2.dll WindowsRelease/SaturnPC/
+            fi
             
-            cd PC_Release
-            zip -r ../saturn_pc_gamepad_edition.zip SaturnDesktop
+            if [ -d "res" ]; then cp -r res WindowsRelease/SaturnPC/; fi
+            if [ -d "assets" ]; then cp -r assets WindowsRelease/SaturnPC/; fi
+            
+            cd WindowsRelease
+            7z a ../saturn_windows_pc_executable.zip SaturnPC
             cd ..
           else
-            echo "❌ No binary found."
+            echo "❌ No .exe generated."
             exit 1
           fi
 
-      - name: 8. Upload PC Build Artifact
+      - name: 7. Upload Windows PC Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-pc-gamepad-bundle
-          path: saturn_pc_gamepad_edition.zip
+          name: saturn-windows-pc-bundle
+          path: saturn_windows_pc_executable.zip
           if-no-files-found: error

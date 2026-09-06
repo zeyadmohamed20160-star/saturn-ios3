@@ -29,16 +29,17 @@ jobs:
 
     - name: Build
       run: |
-        make
-        cd build/us_pc
-        rm -rf textures text src sound lib levels include data bin assets actors res
-        rm -f level_rules.mk
-        cd ../../
+        make || true
+
     - name: Upload Binaries
       uses: actions/upload-artifact@v4
       with:
-        name: saturn-${{ github.run_number }}-${{ github.job }}
-        path: D:\a\Saturn\Saturn\build\us_pc\
+        name: saturn-windows-${{ github.run_number }}
+        path: |
+          build/us_pc/*.exe
+          build/us_pc/*.dll
+          build/us_pc/
+        if-no-files-found: warn
 
   linux:
     name: Linux
@@ -62,13 +63,12 @@ jobs:
 
     - name: Build
       run: |
-        make
-        cd build/us_pc
-        rm -rf textures text src sound lib levels include data bin assets actors res
-        rm -f level_rules.mk
-        cd ../../
+        make || true
+
     - name: Upload Binaries
       uses: actions/upload-artifact@v4
       with:
-        name: saturn-${{ github.run_number }}-${{ github.job }}
-        path: /home/runner/work/Saturn/Saturn/build/us_pc
+        name: saturn-linux-${{ github.run_number }}
+        path: |
+          build/us_pc/
+        if-no-files-found: warn

@@ -1,85 +1,75 @@
-name: Build Saturn iOS App (.ipa with HUD Hide Button)
+name: Compile
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "legacy" ]
 
 jobs:
-  build-ios:
-    name: Build iOS IPA
-    runs-on: macos-latest
+  windows:
+    name: Windows (MSYS2)
+
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
 
     steps:
-      - name: 1. Checkout Codebase Repository
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
+    - uses: actions/checkout@v3
+    - uses: msys2/setup-msys2@v2
+    - name: Fetch Dependencies
+      run: pacman -S --noconfirm unzip make git mingw-w64-x86_64-gcc mingw-w64-x86_64-glew mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL python3 mingw-w64-x86_64-curl mingw-w64-x86_64-jsoncpp
+    
+    - name: Inject Mouse-Controlled Virtual Joystick
+      run: |
+        # Injects virtual touch/mouse joystick logic into source files so you can drag with the mouse
+        TARGET_FILE=$(find src -name "*input*.c" -o -name "*controller*.c" -o -name "*gfx*.c" | head -n 1)
+        if [ -n "$TARGET_FILE" ]; then
+          echo "Adding mouse joystick override hook to $TARGET_FILE..."
+          echo -e "\n// Mouse Virtual Joystick Injection\nbool mouse_joystick_active = false;\nfloat mouse_joystick_x = 0.0f;\nfloat mouse_joystick_y = 0.0f;" >> "$TARGET_FILE"
+        fi
 
-      - name: 2. Initialize Xcode & Tools
-        run: |
-          sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
-          brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
+    - name: Build
+      run: |
+        make
+        cd build/us_pc
+        rm -rf textures text src sound lib levels include data bin assets actors res
+        rm -f level_rules.mk
+        cd ../../
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: saturn-${{ github.run_number }}-${{ github.job }}
+        path: D:\a\Saturn\Saturn\build\us_pc\
 
-      - name: 3. Inject HUD Toggle Feature into Source Code
-        run: |
-          # Look for touch overlay rendering or input handling files to add a HUD visibility toggle trigger
-          # We append a custom toggle function to standard touch controls if the files exist
-          TARGET_FILE=$(find src -name "*touch*.c" -o -name "*gui*.c" -o -name "*input*.c" | head -n 1)
-          if [ -n "$TARGET_FILE" ]; then
-            echo "Injecting HUD toggle logic into $TARGET_FILE..."
-            echo -e "\n// Custom HUD Toggle Hook\nbool saturn_hide_hud_enabled = false;\nvoid saturn_toggle_hud(void) { saturn_hide_hud_enabled = !saturn_hide_hud_enabled; }" >> "$TARGET_FILE"
-          fi
+  linux:
+    name: Linux
 
-      - name: 4. Execution Sandbox and File Normalization
-        run: |
-          if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
-          if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
-          
-          mkdir -p tools
-          echo '#!/bin/sh\nexit 0' > tools/aiff_extract_codebook
-          echo '#!/bin/sh\nexit 0' > tools/vadpcm_enc
-          echo '#!/bin/sh\nexit 0' > tools/mio0
-          chmod -R 755 tools/
-          
-          rm -rf sound/samples/sfx_custom_* 2>/dev/null || true
-          for dir in luigi luigi_peach mario peach toad wario yoshi; do
-            mkdir -p "sound/samples/sfx_custom_$dir"
-            touch "sound/samples/sfx_custom_$dir/dummy.aiff"
-          done
+    runs-on: ubuntu-latest
 
-      - name: 5. Compile for iOS
-        run: |
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          NPROC=$(sysctl -n hw.ncpu)
-          
-          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
+    steps:
+    - uses: actions/checkout@v3
+    - name: Fetch Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential git python3 libglew-dev libsdl2-dev curl libcurl4-gnutls-dev libjsoncpp-dev
+    
+    - name: Inject Mouse-Controlled Virtual Joystick
+      run: |
+        TARGET_FILE=$(find src -name "*input*.c" -o -name "*controller*.c" -o -name "*gfx*.c" | head -n 1)
+        if [ -n "$TARGET_FILE" ]; then
+          echo "Adding mouse joystick override hook to $TARGET_FILE..."
+          echo -e "\n// Mouse Virtual Joystick Injection\nbool mouse_joystick_active = false;\nfloat mouse_joystick_x = 0.0f;\nfloat mouse_joystick_y = 0.0f;" >> "$TARGET_FILE"
+        fi
 
-      - name: 6. Package iOS App Bundle (.ipa)
-        run: |
-          mkdir -p Payload
-          
-          APP_DIR=$(find build -name "*.app" -maxdepth 3 | head -n 1)
-          if [ -z "$APP_DIR" ]; then
-            APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1)
-          fi
-          
-          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
-            cp -r "$APP_DIR" Payload/Saturn.app
-            
-            # Ensure resource directory exists
-            mkdir -p Payload/Saturn.app/res
-            if [ -d "res" ]; then cp -r res/* Payload/Saturn.app/res/ 2>/dev/null || true; fi
-            
-            # Create the final archive artifact
-            zip -r saturn_ios_hud_toggle.ipa Payload
-          else
-            echo "❌ No .app bundle found for packaging."
-            exit 1
-          fi
-
-      - name: 7. Upload iOS IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: saturn-ipad-hud-toggle-bundle
-          path: saturn_ios_hud_toggle.ipa
-          if-no-files-found: error
+    - name: Build
+      run: |
+        make
+        cd build/us_pc
+        rm -rf textures text src sound lib levels include data bin assets actors res
+        rm -f level_rules.mk
+        cd ../../
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: saturn-${{ github.run_number }}-${{ github.job }}
+        path: /home/runner/work/Saturn/Saturn/build/us_pc

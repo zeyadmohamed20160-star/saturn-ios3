@@ -1,0 +1,72 @@
+name: Package App Bundle
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Directory Structure and Package
+        run: |
+          echo "Setting up .app bundle structure..."
+          APP_NAME="MyApplication.app"
+          
+          # 1. Create the standard bundle directories
+          mkdir -p "$APP_NAME/Contents/MacOS"
+          mkdir -p "$APP_NAME/Contents/Resources"
+          mkdir -p "$APP_NAME/ProjectFiles"
+
+          # 2. Move or copy your compiled executable into MacOS/
+          if [ -f "sm64.us.exe" ]; then
+            cp sm64.us.exe "$APP_NAME/Contents/MacOS/"
+            chmod +x "$APP_NAME/Contents/MacOS/sm64.us.exe"
+            echo "Copied sm64.us.exe successfully."
+          else
+            echo "Warning: sm64.us.exe not found in root directory."
+          fi
+
+          # 3. Create a default Info.plist if one doesn't exist
+          if [ -f "Info.plist" ]; then
+            cp Info.plist "$APP_NAME/Contents/"
+          else
+            cat << 'EOF' > "$APP_NAME/Contents/Info.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>sm64.us.exe</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.example.app</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>MyApplication</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+</dict>
+</plist>
+EOF
+            echo "Generated default Info.plist."
+          fi
+
+          # 4. Copy any Xcode project files into the package
+          if compgen -G "*.xcodeproj" > /dev/null; then
+            cp -R *.xcodeproj "$APP_NAME/ProjectFiles/"
+            echo "Copied Xcode project files."
+          fi
+
+      - name: Upload App Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyApplication
+          path: MyApplication.app

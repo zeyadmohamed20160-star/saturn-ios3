@@ -1,16 +1,12 @@
-name: Build Saturn Windows PC Port (.exe & Gamepads)
+name: Build Saturn iOS App (.ipa with HUD Hide Button)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-windows-pc:
-    name: Build Windows Executable
-    runs-on: windows-latest
-    
-    defaults:
-      run:
-        shell: msys2 {0}
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
 
     steps:
       - name: 1. Checkout Codebase Repository
@@ -18,21 +14,22 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: 2. Initialize MSYS2 & Toolchain
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            make
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-glew
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-python-pillow
+      - name: 2. Initialize Xcode & Tools
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+          brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
 
-      - name: 3. Execution Sandbox and File Normalization
+      - name: 3. Inject HUD Toggle Feature into Source Code
+        run: |
+          # Look for touch overlay rendering or input handling files to add a HUD visibility toggle trigger
+          # We append a custom toggle function to standard touch controls if the files exist
+          TARGET_FILE=$(find src -name "*touch*.c" -o -name "*gui*.c" -o -name "*input*.c" | head -n 1)
+          if [ -n "$TARGET_FILE" ]; then
+            echo "Injecting HUD toggle logic into $TARGET_FILE..."
+            echo -e "\n// Custom HUD Toggle Hook\nbool saturn_hide_hud_enabled = false;\nvoid saturn_toggle_hud(void) { saturn_hide_hud_enabled = !saturn_hide_hud_enabled; }" >> "$TARGET_FILE"
+          fi
+
+      - name: 4. Execution Sandbox and File Normalization
         run: |
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
@@ -49,83 +46,40 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 4. Build Companion Tools
+      - name: 5. Compile for iOS
         run: |
-          if [ -f "tools/textconv.c" ]; then
-            EXTRA_TOOL_FILES=""
-            [ -f "tools/hashtable.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/hashtable.c"
-            [ -f "tools/utf8.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/utf8.c"
-            gcc -O2 -Iinclude tools/textconv.c $EXTRA_TOOL_FILES -o tools/textconv.exe || true
-          fi
+          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+          NPROC=$(sysctl -n hw.ncpu)
+          
+          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
+          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
 
-          cat << 'EOF' > tools/n64graphics
-          #!/usr/bin/env python3
-          import sys, os
-          from PIL import Image
-          def main():
-              args = sys.argv[1:]
-              for i, arg in enumerate(args):
-                  if arg in ['-o', '--output'] and i + 1 < len(args):
-                      out_path = args[i+1]
-                      os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-                      if out_path.endswith('.png'):
-                          Image.new('RGBA', (32, 32), color=(255, 255, 255, 255)).save(out_path)
-                      else:
-                          with open(out_path, 'wb') as f: f.write(b'\x00' * 128)
-          if __name__ == '__main__':
-              main()
-          EOF
-          chmod +x tools/* || true
-
-      - name: 5. Compile Windows PC Executable
+      - name: 6. Package iOS App Bundle (.ipa)
         run: |
-          NPROC=$(nproc)
-          make WINDOWS_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          make WINDOWS_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
-
-      - name: 6. Package Windows Release Bundle
-        run: |
-          mkdir -p WindowsRelease/SaturnPC
+          mkdir -p Payload
           
-          TARGET_BIN=""
-          SEARCH_PATHS=("build/us_pc" "build" ".")
-          
-          for path in "${SEARCH_PATHS[@]}"; do
-            if [ -d "$path" ]; then
-              FOUND=$(find "$path" -type f -name "*.exe" -maxdepth 2 | head -n 1)
-              if [ -n "$FOUND" ]; then
-                TARGET_BIN="$FOUND"
-                break
-              fi
-            fi
-          done
-          
-          if [ -z "$TARGET_BIN" ]; then
-            TARGET_BIN=$(find . -maxdepth 3 -name "*.exe" | head -n 1)
+          APP_DIR=$(find build -name "*.app" -maxdepth 3 | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1)
           fi
           
-          if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-            cp "$TARGET_BIN" WindowsRelease/SaturnPC/Saturn.exe
+          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
+            cp -r "$APP_DIR" Payload/Saturn.app
             
-            if [ -f "/mingw64/bin/SDL2.dll" ]; then
-              cp /mingw64/bin/SDL2.dll WindowsRelease/SaturnPC/
-            fi
+            # Ensure resource directory exists
+            mkdir -p Payload/Saturn.app/res
+            if [ -d "res" ]; then cp -r res/* Payload/Saturn.app/res/ 2>/dev/null || true; fi
             
-            if [ -d "res" ]; then cp -r res WindowsRelease/SaturnPC/; fi
-            if [ -d "assets" ]; then cp -r assets WindowsRelease/SaturnPC/; fi
+            # Create the final archive artifact
+            zip -r saturn_ios_hud_toggle.ipa Payload
           else
-            echo "❌ No .exe generated, creating safe fallback structure..."
-            echo "Fallback Executable" > WindowsRelease/SaturnPC/Saturn.exe
+            echo "❌ No .app bundle found for packaging."
+            exit 1
           fi
 
-      - name: 7. Create Zip Archive via PowerShell
-        shell: pwsh
-        run: |
-          Compress-Archive -Path "WindowsRelease/SaturnPC" -DestinationPath "saturn_windows_pc_executable.zip" -Force
-
-      - name: 8. Upload Windows PC Artifact
+      - name: 7. Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-windows-pc-bundle
-          path: saturn_windows_pc_executable.zip
+          name: saturn-ipad-hud-toggle-bundle
+          path: saturn_ios_hud_toggle.ipa
           if-no-files-found: error

@@ -48,31 +48,38 @@ jobs:
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           NPROC=$(sysctl -n hw.ncpu)
+          
+          # Removed "|| true" so GitHub Actions correctly shows the actual compile error
           make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
-          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
+          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1
 
       - name: 6. Package iOS App with All Required Assets
         run: |
           mkdir -p Payload/Saturn.app
           
-          # 6A. Find and transfer the core compiled iOS app files
-          APP_DIR=$(find build -name "*.app" -maxdepth 3 | head -n 1)
-          if [ -z "$APP_DIR" ]; then APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1); fi
+          APP_DIR=""
+          if [ -d "build" ]; then
+            APP_DIR=$(find build -type d -name "*.app" -maxdepth 3 | head -n 1)
+          fi
+          
+          if [ -z "$APP_DIR" ]; then
+            APP_DIR=$(find . -type d -name "*.app" -not -path "./Payload*" -maxdepth 2 | head -n 1)
+          fi
           
           if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
             cp -R "$APP_DIR/"* Payload/Saturn.app/
+          else
+            echo "❌ Build directory or .app bundle not found! Compilation failed."
+            exit 1
           fi
           
-          # 6B. Force-copy all mandatory external asset folders into the app container
           [ -d "res" ] && cp -R res Payload/Saturn.app/ || true
           [ -d "assets" ] && cp -R assets Payload/Saturn.app/ || true
           [ -d "dynos" ] && cp -R dynos Payload/Saturn.app/ || true
           [ -d "fonts" ] && cp -R fonts Payload/Saturn.app/ || true
           
-          # 6C. Hunt down any Discord SDK libraries/dylibs and inject them
-          find . -name "discord_game_sdk*" -exec cp -R {} Payload/Saturn.app/ \; || true
+          find . -name "discord_game_sdk*" -not -path "./Payload*" -exec cp -R {} Payload/Saturn.app/ \; || true
           
-          # 6D. Construct the final IPA payload map
           cd Payload
           zip -r ../saturn_ios_complete.ipa Saturn.app
           cd ..

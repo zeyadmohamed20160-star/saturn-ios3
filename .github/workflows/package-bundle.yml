@@ -13,57 +13,72 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Directory Structure and Package
+      - name: Create Python Packaging Script
         run: |
-          echo "Setting up .app bundle structure..."
-          APP_NAME="MyApplication.app"
-          
-          # 1. Create the standard bundle directories
-          mkdir -p "$APP_NAME/Contents/MacOS"
-          mkdir -p "$APP_NAME/Contents/Resources"
-          mkdir -p "$APP_NAME/ProjectFiles"
+          cat << 'EOF' > make_bundle.py
+          import os
+          import shutil
+          import glob
 
-          # 2. Move or copy your compiled executable into MacOS/
-          if [ -f "sm64.us.exe" ]; then
-            cp sm64.us.exe "$APP_NAME/Contents/MacOS/"
-            chmod +x "$APP_NAME/Contents/MacOS/sm64.us.exe"
-            echo "Copied sm64.us.exe successfully."
-          else
-            echo "Warning: sm64.us.exe not found in root directory."
-          fi
+          app_name = "MyApplication.app"
+          contents = os.path.join(app_name, "Contents")
+          macos = os.path.join(contents, "MacOS")
+          resources = os.path.join(contents, "Resources")
+          project_files = os.path.join(app_name, "ProjectFiles")
 
-          # 3. Create a default Info.plist if one doesn't exist
-          if [ -f "Info.plist" ]; then
-            cp Info.plist "$APP_NAME/Contents/"
-          else
-            cat << 'EOF' > "$APP_NAME/Contents/Info.plist"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>sm64.us.exe</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.example.app</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>MyApplication</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
-            echo "Generated default Info.plist."
-          fi
+          # 1. Create standard bundle directories
+          os.makedirs(macos, exist_ok=True)
+          os.makedirs(resources, exist_ok=True)
+          os.makedirs(project_files, exist_ok=True)
 
-          # 4. Copy any Xcode project files into the package
-          if compgen -G "*.xcodeproj" > /dev/null; then
-            cp -R *.xcodeproj "$APP_NAME/ProjectFiles/"
-            echo "Copied Xcode project files."
-          fi
+          # 2. Copy and set permissions for the executable
+          if os.path.exists("sm64.us.exe"):
+              dest_exe = os.path.join(macos, "sm64.us.exe")
+              shutil.copy("sm64.us.exe", dest_exe)
+              os.chmod(dest_exe, 0o755)
+              print("Copied and permitted sm64.us.exe successfully.")
+          else:
+              print("Warning: sm64.us.exe not found in root directory.")
+
+          # 3. Create or copy Info.plist
+          plist_path = os.path.join(contents, "Info.plist")
+          if os.path.exists("Info.plist"):
+              shutil.copy("Info.plist", plist_path)
+              print("Copied existing Info.plist.")
+          else:
+              plist_content = """<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>sm64.us.exe</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.example.app</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>MyApplication</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+          </dict>
+          </plist>"""
+              with open(plist_path, "w") as f:
+                  f.write(plist_content)
+              print("Generated default Info.plist.")
+
+          # 4. Copy Xcode project files if present
+          for p in glob.glob("*.xcodeproj"):
+              dest_p = os.path.join(project_files, os.path.basename(p))
+              if os.path.exists(dest_p):
+                  shutil.rmtree(dest_p)
+              shutil.copytree(p, dest_p)
+              print(f"Copied Xcode project: {p}")
+          EOF
+
+      - name: Run Packaging Script
+        run: python3 make_bundle.py
 
       - name: Upload App Bundle Artifact
         uses: actions/upload-artifact@v4

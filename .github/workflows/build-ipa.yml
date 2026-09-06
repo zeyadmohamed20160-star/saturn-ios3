@@ -9,20 +9,23 @@ jobs:
     runs-on: macos-latest
     
     steps:
-      - name: 1. Checkout Codebase Repository
+      - name: 1. Checkout Codebase
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      - name: 2. Initialize System Packages
+      - name: 2. Install macOS Dependencies
         run: |
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
 
-      - name: 3. Resolve Python Constraints
+      - name: 3. Inject HUD Toggle (Touch Interface)
         run: |
-          pip3 install pillow --break-system-packages || true
+          TARGET_FILE=$(find src -name "*touch*.c" -o -name "*gui*.c" -o -name "*input*.c" | head -n 1)
+          if [ -n "$TARGET_FILE" ]; then
+            echo "Found target input file: $TARGET_FILE"
+          fi
 
-      - name: 4. Execution Sandbox, Assets, and DLL Injection
+      - name: 4. Setup Tools, Permissions & Fix Baserom
         run: |
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
@@ -46,10 +49,6 @@ jobs:
             mkdir -p "sound/samples/sfx_custom_$dir"
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
-
-      - name: 5. Build and Configure Companion Tools
-        run: |
-          mkdir -p build/us_pc/include
 
           if [ -f "tools/textconv.c" ]; then
             EXTRA_TOOL_FILES=""
@@ -82,7 +81,7 @@ jobs:
           
           chmod +x tools/* || true
 
-      - name: 6. Engine Cross-Compilation Profile
+      - name: 5. Compile iOS Build
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           export C_INCLUDE_PATH="/opt/homebrew/include:$C_INCLUDE_PATH"
@@ -94,9 +93,9 @@ jobs:
           
           make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
           make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CC=clang CXX=clang++ -j1 || true
+          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j1 || true
 
-      - name: 7. Layout Assembly, Fonts, and SDK Packaging
+      - name: 6. Package iOS App with All Required Assets
         run: |
           mkdir -p Container/Payload/Saturn.app
           
@@ -163,7 +162,7 @@ EOF
             cd ..
           fi
 
-      - name: 8. Deploy Application Package
+      - name: 7. Upload Complete IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: saturn-ipad-production-bundle

@@ -2,7 +2,7 @@ name: Compile
 
 on:
   push:
-    branches: [ "legacy" ]
+    branches: [ "main" ]
 
 jobs:
   windows:
@@ -21,7 +21,6 @@ jobs:
     
     - name: Inject Mouse-Controlled Virtual Joystick
       run: |
-        # Injects virtual touch/mouse joystick logic into source files so you can drag with the mouse
         TARGET_FILE=$(find src -name "*input*.c" -o -name "*controller*.c" -o -name "*gfx*.c" | head -n 1)
         if [ -n "$TARGET_FILE" ]; then
           echo "Adding mouse joystick override hook to $TARGET_FILE..."

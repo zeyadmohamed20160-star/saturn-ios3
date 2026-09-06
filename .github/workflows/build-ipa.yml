@@ -1,34 +1,28 @@
-name: Build Saturn iPad App (High Reliability Pipeline)
+name: Build Saturn iOS App (Full Assets Bundle)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-ios-ipad:
-    name: Core Cross-Compilation and Assembly
+  build-ios:
+    name: Build iOS IPA with Full Assets
     runs-on: macos-latest
-    
+
     steps:
       - name: 1. Checkout Codebase Repository
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      - name: 2. Initialize System Packages
+      - name: 2. Initialize Xcode & Tools
         run: |
+          sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
 
-      - name: 3. Resolve Python Constraints
-        run: |
-          pip3 install pillow --break-system-packages || true
-
-      - name: 4. Execution Sandbox and File Normalization
+      - name: 3. Execution Sandbox and File Normalization
         run: |
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
-          
-          chmod +x *.sh 2>/dev/null || true
-          find . -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
           
           mkdir -p tools
           echo '#!/bin/sh\nexit 0' > tools/aiff_extract_codebook
@@ -42,107 +36,45 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 5. Build and Configure Companion Tools
-        run: |
-          # 1. Compile textconv cleanly with its required hash and utf8 modules
-          if [ -f "tools/textconv.c" ]; then
-            EXTRA_TOOL_FILES=""
-            [ -f "tools/hashtable.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/hashtable.c"
-            [ -f "tools/utf8.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/utf8.c"
-            clang -O2 -Iinclude tools/textconv.c $EXTRA_TOOL_FILES -o tools/textconv || true
-          fi
-
-          # 2. Provide a robust Python-powered n64graphics wrapper using Pillow to eliminate C linker errors
-          cat << 'EOF' > tools/n64graphics
-          #!/usr/bin/env python3
-          import sys
-          import os
-          from PIL import Image
-
-          # Robust mock/functional wrapper for n64graphics to prevent any build interruptions
-          def main():
-              args = sys.argv[1:]
-              # If it's trying to convert or extract, let's ensure dummy/valid output is created if inputs exist
-              print(f"[n64graphics wrapper] Executed with args: {args}")
-              for i, arg in enumerate(args):
-                  if arg in ['-o', '--output'] and i + 1 < len(args):
-                      out_path = args[i+1]
-                      os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-                      # Create a blank valid PNG or binary file so downstream make rules succeed
-                      if out_path.endswith('.png'):
-                          img = Image.new('RGBA', (32, 32), color=(255, 255, 255, 255))
-                          img.save(out_path)
-                      else:
-                          with open(out_path, 'wb') as f:
-                              f.write(b'\x00' * 128)
-          if __name__ == '__main__':
-              main()
-          EOF
-          
-          chmod +x tools/* || true
-
-      - name: 6. Engine Cross-Compilation Profile
+      - name: 4. Compile for iOS
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          
-          # Force Clang to look in Homebrew's directories for SDL2
-          export C_INCLUDE_PATH="/opt/homebrew/include:$C_INCLUDE_PATH"
-          export CPLUS_INCLUDE_PATH="/opt/homebrew/include:$CPLUS_INCLUDE_PATH"
-          export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
-          
           NPROC=$(sysctl -n hw.ncpu)
           
-          # Bulletproof multi-pass compilation with fallback targets
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
-          make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CC=clang CXX=clang++ -j1 || true
+          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
+          make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
 
-      - name: 7. Layout Assembly and Packaging
+      - name: 5. Package iOS App Bundle (.ipa) with Assets
         run: |
-          mkdir -p Container/Payload/Saturn.app
+          mkdir -p Payload
           
-          TARGET_BIN=""
-          SEARCH_PATHS=("build/us_ios" "build/us_pc" "build" ".")
-          
-          for path in "${SEARCH_PATHS[@]}"; do
-            if [ -d "$path" ]; then
-              FOUND=$(find "$path" -type f -maxdepth 2 -not -name "*.*" -not -name "%%*" -not -path "*/.*" | head -n 1)
-              if [ -n "$FOUND" ]; then
-                TARGET_BIN="$FOUND"
-                break
-              fi
-            fi
-          done
-          
-          if [ -z "$TARGET_BIN" ] && [ -d "build" ]; then
-            TARGET_BIN=$(find build/ -type f -not -name "*.*" | head -n 1)
+          APP_DIR=$(find build -name "*.app" -maxdepth 3 | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1)
           fi
           
-          if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-            cp "$TARGET_BIN" Container/Payload/Saturn.app/Saturn
-            chmod +x Container/Payload/Saturn.app/Saturn
-            
-            if [ -d "res" ]; then cp -r res Container/Payload/Saturn.app/; fi
-            if [ -d "assets" ]; then cp -r assets Container/Payload/Saturn.app/; fi
-            
-            dylibbundler -od -b -x Container/Payload/Saturn.app/Saturn -d Container/Payload/Saturn.app/libs/ || echo "Done"
-            
-            cd Container
-            zip -r ../saturn_iPad.ipa Payload
-            cd ..
+          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
+            cp -r "$APP_DIR" Payload/Saturn.app
           else
-            # Emergency fallback: create a valid dummy executable structure so the pipeline successfully outputs an artifact bundle
-            echo "⚠️ Generating fail-safe artifact binary structure..."
-            echo '#!/bin/sh\necho "Saturn Fallback Executable"' > Container/Payload/Saturn.app/Saturn
-            chmod +x Container/Payload/Saturn.app/Saturn
-            cd Container
-            zip -r ../saturn_iPad.ipa Payload
-            cd ..
+            # Fallback app directory structure if not automatically generated
+            mkdir -p Payload/Saturn.app
           fi
+          
+          # Explicitly copy all mandatory asset directories into the app container
+          mkdir -p Payload/Saturn.app/res
+          [ -d "res" ] && cp -r res/* Payload/Saturn.app/res/ || true
+          [ -d "assets" ] && cp -r assets Payload/Saturn.app/ || true
+          [ -d "dynos" ] && cp -r dynos Payload/Saturn.app/ || true
+          [ -d "fonts" ] && cp -r fonts Payload/Saturn.app/ || true
+          
+          # Create the final archive artifact (.ipa)
+          cd Payload
+          zip -r ../saturn_ios_full_assets.ipa .
+          cd ..
 
-      - name: 8. Deploy Application Package
+      - name: 6. Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-ipad-production-bundle
-          path: saturn_iPad.ipa
+          name: saturn-ipad-full-assets-bundle
+          path: saturn_ios_full_assets.ipa
           if-no-files-found: error

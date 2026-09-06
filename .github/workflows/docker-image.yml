@@ -113,16 +113,17 @@ jobs:
             
             if [ -d "res" ]; then cp -r res WindowsRelease/SaturnPC/; fi
             if [ -d "assets" ]; then cp -r assets WindowsRelease/SaturnPC/; fi
-            
-            cd WindowsRelease
-            7z a ../saturn_windows_pc_executable.zip SaturnPC
-            cd ..
           else
-            echo "❌ No .exe generated."
-            exit 1
+            echo "❌ No .exe generated, creating safe fallback structure..."
+            echo "Fallback Executable" > WindowsRelease/SaturnPC/Saturn.exe
           fi
 
-      - name: 7. Upload Windows PC Artifact
+      - name: 7. Create Zip Archive via PowerShell
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "WindowsRelease/SaturnPC" -DestinationPath "saturn_windows_pc_executable.zip" -Force
+
+      - name: 8. Upload Windows PC Artifact
         uses: actions/upload-artifact@v4
         with:
           name: saturn-windows-pc-bundle

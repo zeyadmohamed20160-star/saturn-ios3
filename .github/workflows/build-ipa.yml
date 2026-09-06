@@ -30,7 +30,7 @@ jobs:
           chmod +x *.sh 2>/dev/null || true
           find . -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
           
-          mkdir -p assets res
+          mkdir -p assets res build/us_pc/include
           if [ ! -f "discord_game_sdk.dll" ]; then
             touch discord_game_sdk.dll
           fi
@@ -49,6 +49,8 @@ jobs:
 
       - name: 5. Build and Configure Companion Tools
         run: |
+          mkdir -p build/us_pc/include
+
           if [ -f "tools/textconv.c" ]; then
             EXTRA_TOOL_FILES=""
             [ -f "tools/hashtable.c" ] && EXTRA_TOOL_FILES="$EXTRA_TOOL_FILES tools/hashtable.c"
@@ -87,6 +89,7 @@ jobs:
           export CPLUS_INCLUDE_PATH="/opt/homebrew/include:$CPLUS_INCLUDE_PATH"
           export LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH"
           
+          mkdir -p build/us_pc/include
           NPROC=$(sysctl -n hw.ncpu)
           
           make OSX_BUILD=1 TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 CPP="clang -E -P -x c" CC=clang CXX=clang++ -j$NPROC || \
@@ -97,7 +100,6 @@ jobs:
         run: |
           mkdir -p Container/Payload/Saturn.app
           
-          # Create structured directory subpaths inside the Saturn bundle
           mkdir -p Container/Payload/Saturn.app/assets/textures
           mkdir -p Container/Payload/Saturn.app/assets/anims
           mkdir -p Container/Payload/Saturn.app/fonts
@@ -124,29 +126,26 @@ jobs:
             cp "$TARGET_BIN" Container/Payload/Saturn.app/Saturn
             chmod +x Container/Payload/Saturn.app/Saturn
             
-            # Copy game resources and route assets into proper directories
             if [ -d "res" ]; then cp -r res/* Container/Payload/Saturn.app/res/ 2>/dev/null || cp -r res Container/Payload/Saturn.app/; fi
             if [ -d "assets" ]; then cp -r assets/* Container/Payload/Saturn.app/assets/ 2>/dev/null || true; fi
             if [ -d "dynos" ]; then cp -r dynos/* Container/Payload/Saturn.app/dynos/ 2>/dev/null || true; fi
             
-            # Route loose textures and animations to their respective asset folders
             find . -maxdepth 3 -name "*.png" -exec cp {} Container/Payload/Saturn.app/assets/textures/ \; 2>/dev/null || true
             find . -maxdepth 3 -name "*.anim" -exec cp {} Container/Payload/Saturn.app/assets/anims/ \; 2>/dev/null || true
             find . -maxdepth 3 \( -name "*.ttf" -o -name "*.otf" \) -exec cp {} Container/Payload/Saturn.app/fonts/ \; 2>/dev/null || true
             
-            # Inject low-visibility layout & joystick configuration parameters for touch inputs
             cat << 'EOF' > Container/Payload/Saturn.app/touch_controls.json
-            {
-              "joystick": {
-                "opacity": 0.30,
-                "dynamic_positioning": true
-              },
-              "buttons": {
-                "opacity": 0.25,
-                "haptic_feedback": true
-              }
-            }
-            EOF
+{
+  "joystick": {
+    "opacity": 0.30,
+    "dynamic_positioning": true
+  },
+  "buttons": {
+    "opacity": 0.25,
+    "haptic_feedback": true
+  }
+}
+EOF
 
             if [ -f "discord_game_sdk.dll" ]; then cp discord_game_sdk.dll Container/Payload/Saturn.app/; fi
             

@@ -1,25 +1,33 @@
-name: Build Saturn iOS App (Full Assets Bundle)
+name: Build Saturn iOS App (Complete Bundle)
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build-ios:
-    name: Build iOS IPA with Full Assets
+    name: Build iOS IPA
     runs-on: macos-latest
 
     steps:
-      - name: 1. Checkout Codebase Repository
+      - name: 1. Checkout Codebase
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      - name: 2. Initialize Xcode & Tools
+      - name: 2. Install macOS Dependencies
         run: |
-          sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
           brew install make pkg-config coreutils sdl2 glew adamstark-audiofile dylibbundler glfw || true
 
-      - name: 3. Execution Sandbox and File Normalization
+      - name: 3. Inject HUD Toggle (Touch Interface)
+        run: |
+          TARGET_FILE=$(find src -name "*touch*.c" -o -name "*gui*.c" -o -name "*input*.c" | head -n 1)
+          if [ -n "$TARGET_FILE" ]; then
+            echo -e "\n// Custom HUD Toggle Hook\nbool saturn_hide_hud_enabled = false;\nvoid saturn_toggle_hud(void) { saturn_hide_hud_enabled = !saturn_hide_hud_enabled; }" >> "$TARGET_FILE"
+          fi
+
+      - name: 4. Setup Tools & Fix Baserom
         run: |
           if [ -f "makefile" ] && [ ! -f "Makefile" ]; then mv makefile Makefile; fi
           if [ -f "baserom.us..z64" ]; then mv baserom.us..z64 baserom.us.z64; fi
@@ -36,45 +44,42 @@ jobs:
             touch "sound/samples/sfx_custom_$dir/dummy.aiff"
           done
 
-      - name: 4. Compile for iOS
+      - name: 5. Compile iOS Build
         run: |
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
           NPROC=$(sysctl -n hw.ncpu)
-          
           make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j$NPROC || \
           make TARGET_IOS=1 NOEXTRACT=1 DEBUG=0 NON_MATCHING=1 COMPARE=0 -j1 || true
 
-      - name: 5. Package iOS App Bundle (.ipa) with Assets
+      - name: 6. Package iOS App with All Required Assets
         run: |
-          mkdir -p Payload
+          mkdir -p Payload/Saturn.app
           
+          # 6A. Find and transfer the core compiled iOS app files
           APP_DIR=$(find build -name "*.app" -maxdepth 3 | head -n 1)
-          if [ -z "$APP_DIR" ]; then
-            APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1)
-          fi
+          if [ -z "$APP_DIR" ]; then APP_DIR=$(find . -name "*.app" -maxdepth 2 | head -n 1); fi
           
           if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
-            cp -r "$APP_DIR" Payload/Saturn.app
-          else
-            # Fallback app directory structure if not automatically generated
-            mkdir -p Payload/Saturn.app
+            cp -R "$APP_DIR/"* Payload/Saturn.app/
           fi
           
-          # Explicitly copy all mandatory asset directories into the app container
-          mkdir -p Payload/Saturn.app/res
-          [ -d "res" ] && cp -r res/* Payload/Saturn.app/res/ || true
-          [ -d "assets" ] && cp -r assets Payload/Saturn.app/ || true
-          [ -d "dynos" ] && cp -r dynos Payload/Saturn.app/ || true
-          [ -d "fonts" ] && cp -r fonts Payload/Saturn.app/ || true
+          # 6B. Force-copy all mandatory external asset folders into the app container
+          [ -d "res" ] && cp -R res Payload/Saturn.app/ || true
+          [ -d "assets" ] && cp -R assets Payload/Saturn.app/ || true
+          [ -d "dynos" ] && cp -R dynos Payload/Saturn.app/ || true
+          [ -d "fonts" ] && cp -R fonts Payload/Saturn.app/ || true
           
-          # Create the final archive artifact (.ipa)
+          # 6C. Hunt down any Discord SDK libraries/dylibs and inject them
+          find . -name "discord_game_sdk*" -exec cp -R {} Payload/Saturn.app/ \; || true
+          
+          # 6D. Construct the final IPA payload map
           cd Payload
-          zip -r ../saturn_ios_full_assets.ipa .
+          zip -r ../saturn_ios_complete.ipa Saturn.app
           cd ..
 
-      - name: 6. Upload iOS IPA Artifact
+      - name: 7. Upload Complete IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-ipad-full-assets-bundle
-          path: saturn_ios_full_assets.ipa
+          name: saturn-ios-complete-bundle
+          path: saturn_ios_complete.ipa
           if-no-files-found: error

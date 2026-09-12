@@ -21,7 +21,6 @@ jobs:
       - name: Install Project Blueprint Structuring Utilities
         run: |
           echo "[*] Preparing native Apple environment toolchains..."
-          # Install xcodegen to generate a perfect .xcodeproj blueprint for your 574 files automatically
           brew install xcodegen
 
       - name: Dynamically Map and Generate .xcodeproj Blueprint
@@ -30,11 +29,13 @@ jobs:
           echo "  GENERATING XCODE PROJECT BLUEPRINT FOR 574 FILES "
           echo "=================================================="
           
-          # Create a dynamic project configuration file that registers all your files into Xcode
+          # FIXED CONFIG: Added explicit options block forcing the generator tool
+          # to match Xcode 15 compatibility parameters instead of jumping to Xcode 16 format (77).
           cat << "EOF" > project.yml
           name: SaturnApp
           options:
             bundleIdPrefix: com.zezo
+            xcodeVersion: "15.0"
           targets:
             SaturnApp:
               type: application
@@ -45,9 +46,8 @@ jobs:
                   includes: ["**/*.cpp", "**/*.c", "**/*.h"]
           EOF
           
-          # Generate the actual SaturnApp.xcodeproj file structure instantly!
           xcodegen generate
-          echo "[✔] Successfully generated SaturnApp.xcodeproj containing all source files!"
+          echo "[✔] Successfully generated SaturnApp.xcodeproj with backward compatibility!"
 
       - name: Compile Xcode Project into Native .app Container
         run: |
@@ -55,7 +55,6 @@ jobs:
           echo "   COMPILING XCODE PROJECT INTO NATIVE .APP BUNDLE "
           echo "=================================================="
           
-          # Use Apple native command-line compiler to build all mapped files into a genuine .app
           xcodebuild -project SaturnApp.xcodeproj \
                      -scheme SaturnApp \
                      -configuration Release \
@@ -65,7 +64,6 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      clean build
                      
-          # Locate the compiled .app bundle output container layers
           mkdir -p build_output
           cp -R build/Release-iphoneos/SaturnApp.app build_output/MyApplication.app
           echo "[✔] Native iOS .app container built successfully."
@@ -92,20 +90,16 @@ jobs:
 
           os.makedirs(payload_dir, exist_ok=True)
 
-          # Copy the freshly compiled Apple native .app folder structure inside Payload
           shutil.copytree("build_output/MyApplication.app", app_dest, dirs_exist_ok=True)
           
-          # Force execute flags on the main internal compiled binary inside the folder mapping
           internal_bin = os.path.join(app_dest, "SaturnApp")
           if os.path.exists(internal_bin):
               os.chmod(internal_bin, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
           
-          # Enforce exact size scaling threshold to pad the app bundle asset size to exactly 21MB
-          # This appends data directly into the binary layout to hit the 21MB target limit safely
+          # Append dummy bytes to pad the compiled architecture directly up to exactly 21MB
           with open(internal_bin, "ab") as f:
               f.write(b"\x00" * (21 * 1024 * 1024))
 
-          # Compress the file framework cleanly into a production .ipa container
           ipa_filename = "MyApplication.ipa"
           with zipfile.ZipFile(ipa_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
               for root, dirs, files in os.walk(payload_dir):

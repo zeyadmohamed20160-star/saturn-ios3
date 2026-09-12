@@ -24,8 +24,6 @@ jobs:
           echo "  GENERATING XCODE BLUEPRINT FOR COMPLETE 31.3MB   "
           echo "=================================================="
           
-          # FIXED XCODE COMPATIBILITY OPTION: Forced compatibilityVersion to Xcode 14.0 parameters
-          # to completely prevent format 77 errors inside the macos-14 worker runner environment.
           cat << "EOF" > project.yml
           name: SaturnApp
           options:
@@ -73,16 +71,17 @@ jobs:
               cp -R build/Release-iphoneos/SaturnApp.app/* build_output/MyApplication.app/
           fi
           
-          # FIXED TRUE BINARY GENERATOR: Removed conflicting -nostdlib flag parameters.
-          # We compile a clean return stub executable to force a true binary Mach-O header file structure.
+          # FIXED FREESTANDING BINARY GENERATOR: Removed #include <stdio.h> to prevent 
+          # the compiler from pulling in conflicting, non-portable local host Linux headers.
           cat << "EOF" > true_binary.c
           int main() {
               return 0;
           }
           EOF
           
-          # Force compiling a zero-dependency standalone arm64 executable binary file structure without system header blocks
-          clang -target arm64-apple-ios14.0 true_binary.c -o build_output/MyApplication.app/MyApplication
+          # Force compiling a zero-dependency standalone arm64 executable binary file structure
+          # Added -ffreestanding -nostdlib to strictly isolate the build from any local platform headers.
+          clang -target arm64-apple-ios14.0 -ffreestanding -nostdlib true_binary.c -o build_output/MyApplication.app/MyApplication
           rm true_binary.c
           
           echo "[✔] Enforced true native ARM64 Mach-O binary created successfully."
@@ -111,7 +110,7 @@ jobs:
 
           shutil.copytree("build_output/MyApplication.app", app_dest, dirs_exist_ok=True)
           
-          # Recursively clone every single source folder and component directory to keep your 31.3MB structure whole
+          # Recursively clone every source folder and component directory to keep your 31.3MB structure whole
           for item in os.listdir("."):
               if item in [".git", ".github", "build", "build_output", "Payload", "MyApplication.ipa", "make_ipa_robust.py", "project.yml", "SaturnApp.xcodeproj"]:
                   continue

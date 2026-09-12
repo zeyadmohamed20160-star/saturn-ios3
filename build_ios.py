@@ -7,31 +7,36 @@ print("==================================================")
 print("   COMPILING SATURN FOR iOS (MACOS RUNNER)       ")
 print("==================================================")
 
-# 1. Define paths (adjust 'xcode_src' to where your files are located in the repo)
-src_dir = "./xcode_src"
-staging_dir = "./Saturn_Build_Staging"
-payload_dir = os.path.join(staging_dir, "Payload")
-app_dest = os.path.join(payload_dir, "MyApplication.app")
-binary_name = "MyApplication"
-output_ipa = "SaturnCompletePackage.ipa"
+# 1. Recursively search the entire repository workspace for C and C++ source files
+print("[+] Searching entire workspace for .cpp and .c files...")
 
-if os.path.exists(staging_dir):
-    shutil.rmtree(staging_dir)
+c_files = glob.glob("./**/*.c", recursive=True)
+cpp_files = glob.glob("./**/*.cpp", recursive=True)
 
-os.makedirs(app_dest, exist_ok=True)
+# Filter out build staging and git metadata directories
+source_files = [
+    f for f in (c_files + cpp_files) 
+    if "Saturn_Build_Staging" not in f and ".git" not in f
+]
 
-print("[+] Searching for C, C++, and Header files...")
-
-# Gather all .cpp and .c source files recursively
-c_files = glob.glob(os.path.join(src_dir, "**", "*.c"), recursive=True)
-cpp_files = glob.glob(os.path.join(src_dir, "**", "*.cpp"), recursive=True)
-source_files = c_files + cpp_files
-
-print(f"[+] Found {len(source_files)} source files to compile.")
+print(f"[+] Found {len(source_files)} source files:")
+for sf in source_files:
+    print(f"    -> {sf}")
 
 if len(source_files) == 0:
-    print("[!] Error: No .cpp or .c files found in the source directory!")
+    print("[!] Error: No .cpp or .c files found anywhere in the repository!")
+    print("[!] Please make sure your source files were successfully committed and pushed to GitHub.")
     exit(1)
+
+# Find all header directories so the compiler can locate .h files anywhere
+h_files = glob.glob("./**/*.h", recursive=True)
+include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in hf and ".git" not in hf))
+
+include_flags = []
+for d in include_dirs:
+    include_flags.extend(["-I", d])
+
+print(f"[+] Found header files across {len(include_dirs)} directories.")
 
 # 2. Get the iOS SDK Path from Xcode
 try:
@@ -43,21 +48,32 @@ except Exception as e:
     print(f"[!] Error finding iOS SDK: {e}")
     exit(1)
 
-# 3. Compile source files into a real ARM64 Mach-O iOS binary using Clang
+# Setup output staging directories
+staging_dir = "./Saturn_Build_Staging"
+payload_dir = os.path.join(staging_dir, "Payload")
+app_dest = os.path.join(payload_dir, "MyApplication.app")
+binary_name = "MyApplication"
+output_ipa = "SaturnCompletePackage.ipa"
+
+if os.path.exists(staging_dir):
+    shutil.rmtree(staging_dir)
+
+os.makedirs(app_dest, exist_ok=True)
+
+# 3. Compile source files into a real ARM64 Mach-O iOS binary using Clang++
 output_binary_path = os.path.join(app_dest, binary_name)
 
-# Base compiler command for iOS
 compile_cmd = [
     "clang++",
     "-arch", "arm64",
     "-isysroot", sdk_path,
     "-miphoneos-version-min=14.0",
-    # Link essential iOS frameworks so UI and functions work properly
+    # Link essential iOS frameworks for UI, buttons, and graphics
     "-framework", "UIKit",
     "-framework", "Foundation",
     "-framework", "CoreGraphics",
-    "-framework", "OpenGLES", # Included if Saturn uses basic graphics rendering
-] + source_files + ["-o", output_binary_path]
+    "-framework", "OpenGLES",
+] + include_flags + source_files + ["-o", output_binary_path]
 
 print("[+] Compiling and linking source files (this may take a moment)...")
 result = subprocess.run(compile_cmd, capture_output=True, text=True)

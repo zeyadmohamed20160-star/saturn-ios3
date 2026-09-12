@@ -2,12 +2,13 @@ import os
 import subprocess
 import shutil
 import glob
+import zipfile
 
 print("==================================================")
 print("   COMPILING SATURN FOR iOS (MACOS RUNNER)       ")
 print("==================================================")
 
-# 1. Recursively search the entire repository workspace for C and C++ source files
+# 1. Recursively search the entire workspace for C and C++ source files
 print("[+] Searching entire workspace for .cpp and .c files...")
 
 c_files = glob.glob("./**/*.c", recursive=True)
@@ -19,13 +20,10 @@ source_files = [
     if "Saturn_Build_Staging" not in f and ".git" not in f
 ]
 
-print(f"[+] Found {len(source_files)} source files:")
-for sf in source_files:
-    print(f"    -> {sf}")
+print(f"[+] Found {len(source_files)} source files.")
 
 if len(source_files) == 0:
     print("[!] Error: No .cpp or .c files found anywhere in the repository!")
-    print("[!] Please make sure your source files were successfully committed and pushed to GitHub.")
     exit(1)
 
 # Find all header directories so the compiler can locate .h files anywhere
@@ -38,7 +36,24 @@ for d in include_dirs:
 
 print(f"[+] Found header files across {len(include_dirs)} directories.")
 
-# 2. Get the iOS SDK Path from Xcode
+# 2. Automatically patch known Dear ImGui modern compiler issues
+print("[+] Checking for files to patch...")
+for hf in h_files:
+    if "imgui.h" in hf:
+        try:
+            with open(hf, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            
+            # Fix format_max = NULL / pointer-to-void initialization error in modern Clang
+            if "format_max = NULL" in content:
+                content = content.replace("format_max = NULL", "format_max = 0")
+                with open(hf, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"[✔] Successfully patched NULL initialization in: {hf}")
+        except Exception as e:
+            print(f"[!] Warning: Could not patch {hf}: {e}")
+
+# 3. Get the iOS SDK Path from Xcode
 try:
     sdk_path = subprocess.check_output(
         ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"]
@@ -60,7 +75,7 @@ if os.path.exists(staging_dir):
 
 os.makedirs(app_dest, exist_ok=True)
 
-# 3. Compile source files into a real ARM64 Mach-O iOS binary using Clang++
+# 4. Compile source files into a real ARM64 Mach-O iOS binary using Clang++
 output_binary_path = os.path.join(app_dest, binary_name)
 
 compile_cmd = [
@@ -68,6 +83,7 @@ compile_cmd = [
     "-arch", "arm64",
     "-isysroot", sdk_path,
     "-miphoneos-version-min=14.0",
+    "-std=c++17",
     # Link essential iOS frameworks for UI, buttons, and graphics
     "-framework", "UIKit",
     "-framework", "Foundation",
@@ -85,7 +101,7 @@ if result.returncode != 0:
 else:
     print("[✔] Successfully compiled real ARM64 iOS executable!")
 
-# 4. Generate a valid Info.plist configuration file
+# 5. Generate a valid Info.plist configuration file
 plist_path = os.path.join(app_dest, "Info.plist")
 plist_content = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
@@ -124,8 +140,7 @@ plist_content = """<?xml version="1.0" encoding="UTF-8"?>
 with open(plist_path, "w", encoding="utf-8") as f:
     f.write(plist_content)
 
-# 5. Compress into the final .ipa distribution package
-import zipfile
+# 6. Compress into the final .ipa distribution package
 print("[+] Packaging into .ipa container...")
 with zipfile.ZipFile(output_ipa, "w", zipfile.ZIP_DEFLATED) as zipf:
     for root, dirs, files in os.walk(payload_dir):

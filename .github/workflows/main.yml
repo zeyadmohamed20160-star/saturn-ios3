@@ -24,7 +24,7 @@ jobs:
           echo "  GENERATING ISOLATED iOS APPLICATION ARCHITECTURE"
           echo "=================================================="
           
-          mkdir -p build_output/MyApplication.app
+          mkdir -p build_output/MyApplication.app/xcode_src
           
           # COMPILE NATIVE BINARY: Create a clean C source stub and compile it 
           # using Clang targeted explicitly for ARM64 platforms.
@@ -53,6 +53,7 @@ jobs:
 
           payload_dir = "Payload"
           app_dest = os.path.join(payload_dir, "MyApplication.app")
+          xcode_src_dest = os.path.join(app_dest, "xcode_src")
 
           if os.path.exists(payload_dir):
               shutil.rmtree(payload_dir)
@@ -64,24 +65,43 @@ jobs:
           # Move the compiled app layout containing the standalone binary directly to staging
           shutil.copytree("build_output/MyApplication.app", app_dest, dirs_exist_ok=True)
           
-          # STRICT BUNDLING FILTER: Pack asset folders but EXPLICITLY block 
-          # any source code text files (.c, .cpp, .h, .hpp, etc.) from leaking inside.
-          blocked_extensions = [".c", ".cpp", ".h", ".hpp", ".inl", ".sh", ".py", ".yml", ".txt", ".makefile", "Makefile"]
+          # EXTENSION DEF: Define source code file extensions that must be hidden away in xcode_src
+          source_extensions = [".c", ".cpp", ".h", ".hpp", ".inl", ".mm", ".m", ".sh", ".py", ".yml", ".txt", ".makefile", "Makefile"]
           
+          # Walk through the repository and sort assets from source files dynamically
           for item in os.listdir("."):
               if item in [".git", ".github", "build_output", "Payload", "MyApplication.ipa", "make_ipa_robust.py", "core_entry.c", "project.yml"]:
                   continue
                   
-              dest_path = os.path.join(app_dest, item)
               if os.path.isdir(item):
-                  # Completely drop source code folders from the final app structure
-                  if item in ["src", "Source", "include", "imgui", "buffers", "engine", "game"]:
-                      continue
-                  shutil.copytree(item, dest_path, dirs_exist_ok=True)
+                  # If it is a known code repository directory, move its contents entirely inside xcode_src
+                  if item in ["src", "Source", "include", "imgui", "buffers", "engine", "game", "bin"]:
+                      dest_folder_path = os.path.join(xcode_src_dest, item)
+                      shutil.copytree(item, dest_folder_path, dirs_exist_ok=True)
+                  else:
+                      # Check sub-items of generic directories for source files
+                      dest_dir = os.path.join(app_dest, item)
+                      shutil.copytree(item, dest_dir, dirs_exist_ok=True)
               else:
-                  if any(item.endswith(ext) for ext in blocked_extensions):
-                      continue
-                  shutil.copy(item, dest_path)
+                  # Sort discrete root tracking files based on extension properties
+                  if any(item.endswith(ext) for ext in source_extensions):
+                      shutil.copy(item, os.path.join(xcode_src_dest, item))
+                  else:
+                      shutil.copy(item, os.path.join(app_dest, item))
+
+          # SECONDARY CLEANUP RECURSION LAYER: Traverse the root app folder tree paths 
+          # and move any nested loose source code files inside our protected xcode_src container
+          for root, dirs, files in os.walk(app_dest):
+              if "xcode_src" in root:
+                  continue
+              for file in files:
+                  if any(file.endswith(ext) for ext in source_extensions):
+                      file_src_path = os.path.join(root, file)
+                      # Clean file removal to keep the runtime payload pure
+                      try:
+                          os.remove(file_src_path)
+                      except:
+                          pass
 
           # Target the primary executable file path
           internal_bin = os.path.join(app_dest, "MyApplication")
@@ -143,7 +163,7 @@ jobs:
                       arcname = arcname.replace("\\", "/")
                       zipf.write(file_path, arcname)
 
-          print("[✔] SUCCESS // UNIFIED SATURN MOBILE IPA PACKAGE GENERATED WITH CLEAN COMPILED BINARY ENTRY.")
+          print("[✔] SUCCESS // UNIFIED SATURN MOBILE IPA PACKAGE GENERATED WITH xcode_src CONTEXT LAYER.")
           EOF
           
           python3 make_ipa_robust.py

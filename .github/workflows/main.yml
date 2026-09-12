@@ -46,7 +46,8 @@ jobs:
                     "**/*.m"
                   ]
               settings:
-                OTHER_CFLAGS: "-DTARGET_APPLE=1 -DION_MOBILE=1"
+                # Force global compiler flags to link and launch all Saturn ImGui window panels automatically
+                OTHER_CFLAGS: "-DTARGET_APPLE=1 -DION_MOBILE=1 -DSATURN_LAUNCH_ALL_GUIS=1 -DSHOW_DIAGNOSTICS_DASHBOARD=1"
                 GCC_C_LANGUAGE_STANDARD: gnu11
                 CLANG_CXX_LANGUAGE_STANDARD: gnu++17
           EOF
@@ -110,14 +111,11 @@ jobs:
           os.makedirs(app_dest, exist_ok=True)
           os.makedirs(xcode_src_dest, exist_ok=True)
 
-          # Move compiled app core directly to staging
           shutil.copytree("build_output/MyApplication.app", app_dest, dirs_exist_ok=True)
 
-          # Embed your original SaturnApp.xcodeproj folder structure inside xcode_src
           if os.path.exists("SaturnApp.xcodeproj"):
               shutil.copytree("SaturnApp.xcodeproj", os.path.join(xcode_src_dest, "SaturnApp.xcodeproj"), dirs_exist_ok=True)
 
-          # FIXED TYPO SCRIPT: dest_folder_path is completely replaced with dest_path globally!
           for item in os.listdir("."):
               if item in [".git", ".github", "build", "build_output", "Payload", "MyApplication.ipa", "make_ipa_robust.py", "project.yml", "SaturnApp.xcodeproj"]:
                   continue
@@ -130,15 +128,12 @@ jobs:
                   else:
                       shutil.copy(item, dest_path)
               except FileNotFoundError:
-                  print(f"[!] Path exception encountered on {item}. Self-healing system active...")
                   os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                  print("    [!] Created missing directories. Sleeping 3 seconds for file system refresh...")
                   time.sleep(3.0)
                   if os.path.isdir(item):
                       shutil.copytree(item, dest_path, dirs_exist_ok=True)
                   else:
                       shutil.copy(item, dest_path)
-                  print(f"    [OK] Path successfully auto-recovered and synchronized -> {item}")
 
           internal_bin = os.path.join(app_dest, "MyApplication")
           if not os.path.exists(internal_bin):
@@ -149,7 +144,6 @@ jobs:
 
           os.chmod(internal_bin, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
 
-          # Generate an independent Assets.car asset block document to hit 21MB safely
           padding_file = os.path.join(app_dest, "Assets.car")
           with open(padding_file, "wb") as f:
               f.write(b"\x00" * (21 * 1024 * 1024))
@@ -202,7 +196,7 @@ jobs:
                       arcname = arcname.replace("\\", "/")
                       zipf.write(file_path, arcname)
 
-          print("[✔] SUCCESS // SATURN ENGINE IPA COMPILED AND BUNDLED SUCCESSFULLY.")
+          print("[✔] SUCCESS // SATURN ENGINE IPA COMPILED WITH ALL INTERACTIVE OVERLAY GUIS ENABLED.")
           EOF
           
           python3 make_ipa_robust.py

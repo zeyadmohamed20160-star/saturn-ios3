@@ -28,7 +28,9 @@ if len(source_files) == 0:
 
 # Find all header directories so the compiler can locate .h files anywhere
 h_files = glob.glob("./**/*.h", recursive=True)
-include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in f and ".git" not in f))
+
+# Fixed variable name: checking 'hf' instead of 'f'
+include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in hf and ".git" not in hf))
 
 include_flags = []
 for d in include_dirs:

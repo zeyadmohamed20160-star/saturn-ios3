@@ -28,7 +28,7 @@ if len(source_files) == 0:
 
 # Find all header directories so the compiler can locate .h files anywhere
 h_files = glob.glob("./**/*.h", recursive=True)
-include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in hf and ".git" not in hf))
+include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in f and ".git" not in f))
 
 include_flags = []
 for d in include_dirs:
@@ -36,20 +36,20 @@ for d in include_dirs:
 
 print(f"[+] Found header files across {len(include_dirs)} directories.")
 
-# 2. Automatically patch known Dear ImGui modern compiler issues
-print("[+] Checking for files to patch...")
+# 2. Automatically patch NULL default parameters in headers for modern Clang compatibility
+print("[+] Patching header files for modern compiler compatibility...")
 for hf in h_files:
-    if "imgui.h" in hf:
+    if "Saturn_Build_Staging" not in hf and ".git" not in hf:
         try:
             with open(hf, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
             
-            # Fix format_max = NULL / pointer-to-void initialization error in modern Clang
-            if "format_max = NULL" in content:
-                content = content.replace("format_max = NULL", "format_max = 0")
+            # Replace NULL default parameter assignments with nullptr to avoid void* conversion errors
+            if "= NULL" in content:
+                content = content.replace("= NULL", "= nullptr")
                 with open(hf, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"[✔] Successfully patched NULL initialization in: {hf}")
+                print(f"[✔] Patched NULL defaults in: {hf}")
         except Exception as e:
             print(f"[!] Warning: Could not patch {hf}: {e}")
 

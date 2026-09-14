@@ -29,7 +29,8 @@ if len(source_files) == 0:
 # Find all header directories so the compiler can locate .h files anywhere
 h_files = glob.glob("./**/*.h", recursive=True)
 
-include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in hf and ".git" not in f))
+# Cleaned list comprehension (strictly using hf everywhere)
+include_dirs = list(set(os.path.dirname(hf) for hf in h_files if "Saturn_Build_Staging" not in hf and ".git" not in hf))
 
 include_flags = []
 for d in include_dirs:
@@ -37,32 +38,32 @@ for d in include_dirs:
 
 print(f"[+] Found header files across {len(include_dirs)} directories.")
 
-# 2. Automatically patch header files for compatibility
-print("[+] Patching header files for modern compiler compatibility...")
+# 2. Automatically patch headers for modern Clang and missing custom libc functions
+print("[+] Patching header files for compatibility...")
 for hf in h_files:
-    if "Saturn_Build_Staging" not in hf and ".git" not in f:
+    if "Saturn_Build_Staging" not in hf and ".git" not in hf:
         try:
-            with open(hf, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            with open(hf, "r", encoding="utf-8", errors="ignore") as f_in:
+                content = f_in.read()
             
             modified = False
-
-            # Fix 1: Replace NULL default parameter assignments with nullptr
+            
+            # Replace NULL default parameter assignments with nullptr to avoid void* conversion errors
             if "= NULL" in content:
                 content = content.replace("= NULL", "= nullptr")
                 modified = True
-
-            # Fix 2: If this is the custom libc string.h file, ensure memset is declared
-            if os.path.basename(hf) == "string.h" and "memset" not in content:
-                content += "\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid *memset(void *b, int c, size_t len);\n#ifdef __cplusplus\n}\n#endif\n"
+            
+            # Patch custom libc string.h if it's missing memset
+            if "string.h" in hf and "memset" not in content:
+                content += "\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid *memset(void *ptr, int value, size_t num);\n#ifdef __cplusplus\n}\n#endif\n"
                 modified = True
-                print(f"[✔] Added memset declaration to custom string.h: {hf}")
+                print(f"[✔] Added missing memset declaration to: {hf}")
 
             if modified:
-                with open(hf, "w", encoding="utf-8") as f:
-                    f.write(content)
+                with open(hf, "w", encoding="utf-8") as f_out:
+                    f_out.write(content)
                 print(f"[✔] Patched: {hf}")
-
+                
         except Exception as e:
             print(f"[!] Warning: Could not patch {hf}: {e}")
 

@@ -1,0 +1,53 @@
+name: Build Saturn iOS App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-compile:
+    runs-on: macos-14
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Run Python File Discovery
+      run: python cpp_c_h_finder.py
+
+    - name: Set up Xcode Version
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+    - name: Compile Code using Project Makefile
+      run: |
+        # Injects the target and version requirements directly into the project Makefile
+        make TARGET_IOS=1 VERSION=us CPP="cpp -xc -Iinclude" CCFLAGS="-Iinclude" EXTRA_CFLAGS="-Iinclude" -j4
+
+    - name: Assemble IPA Payload Container
+      run: |
+        mkdir -p Payload
+        # Localizes the compiled app target file into the Apple IPA layout framework
+        if [ -d "SaturnIOS3.app" ]; then
+          cp -r SaturnIOS3.app Payload/
+        elif [ -d "build/Release-iphoneos/SaturnIOS3.app" ]; then
+          cp -r build/Release-iphoneos/SaturnIOS3.app Payload/
+        else
+          # Fallback mechanism if built directly via directory references
+          mkdir -p Payload/SaturnIOS3.app
+          find . -name "*.app" -exec cp -r {} Payload/ \;
+        fi
+        
+        # Compresses payload layout into an installable iOS archive
+        zip -r SaturnIOS3.ipa Payload
+
+    - name: Upload Finished Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Saturn-iOS-IPA
+        path: SaturnIOS3.ipa

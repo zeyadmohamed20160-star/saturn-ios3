@@ -1,3 +1,10 @@
+# Forced platform configurations for GitHub Cloud Actions
+TARGET_IOS := 1
+TARGET_ARCH := arm64
+VERSION := us
+CPP := clang -E -P -xc
+CFLAGS += -I/opt/homebrew/include -I/opt/homebrew/opt/sdl2/include
+LDFLAGS += -L/opt/homebrew/lib -L/opt/homebrew/opt/sdl2/lib
 
 # Makefile to rebuild SM64 split image
 

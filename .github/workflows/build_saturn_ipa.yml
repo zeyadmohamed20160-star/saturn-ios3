@@ -28,18 +28,8 @@ jobs:
     - name: Compile iOS Binary via Makefile
       run: |
         set -e
-        SDL2_PATH="/opt/homebrew/opt/sdl2"
-        export CFLAGS="-I$SDL2_PATH/include -I/opt/homebrew/include"
-        export LDFLAGS="-L$SDL2_PATH/lib -L/opt/homebrew/lib"
-        
-        make TARGET_WEB=0 \
-             TARGET_N3DS=0 \
-             TARGET_SWITCH=0 \
-             TARGET_IOS=1 \
-             TARGET_ARCH=arm64 \
-             VERSION=us \
-             CPP="clang -E -P -xc" \
-             -j$(sysctl -n hw.ncpu)
+        # Runs the build directly using our forced Makefile targets
+        make -j$(sysctl -n hw.ncpu)
 
     - name: Assemble Unmodified IPA Payload
       run: |
@@ -59,7 +49,6 @@ jobs:
           fi
         fi
 
-        # We keep all files intact here to fix the black screen freeze
         zip -r SaturnIOS3.ipa Payload
 
     - name: Upload Finished iOS Installation File

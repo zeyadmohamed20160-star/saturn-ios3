@@ -29,9 +29,20 @@ jobs:
       run: |
         set -e
         
-        # Explicitly forces the C Preprocessor macro settings to use a clean clang format
-        # This fixes the clang: error: no such file or directory: 'c' bug
-        make TARGET_IOS=1 TARGET_ARCH=arm64 VERSION=us CPP="clang -E -P -xc" -j$(sysctl -n hw.ncpu)
+        # 1. Grab the exact compiler and linker flags for Homebrew's SDL2 setup
+        SDL_CFLAGS=$(pkg-config --cflags sdl2)
+        SDL_LDFLAGS=$(pkg-config --libs sdl2)
+        
+        # 2. Export build targets as true system variables so the Makefile switches to iOS mode
+        export TARGET_IOS=1
+        export TARGET_ARCH=arm64
+        export VERSION=us
+        
+        # 3. Run compilation, forcing the include flags to combine the custom clang preprocessor and SDL2
+        make CPP="clang -E -P -xc" \
+             EXT_C_FLAGS="$SDL_CFLAGS" \
+             EXT_L_FLAGS="$SDL_LDFLAGS" \
+             -j$(sysctl -n hw.ncpu)
 
     - name: Assemble Valid IPA Payload
       run: |
